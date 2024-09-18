@@ -1,4 +1,4 @@
-var transform = (function() {
+((function() {
   /* istanbul ignore next */
   if (typeof document === 'undefined') return 'transform';
   var properties = [
@@ -17,7 +17,7 @@ var transform = (function() {
   }
   /* istanbul ignore next */
   return 'transform';
-}());
+})());
 
 var dpr = typeof window !== 'undefined' && window.devicePixelRatio || 1;
 
@@ -103,7 +103,7 @@ function computeFontSize(el) {
     .match(/(.+)px/)[1] * 1;
 }
 
-function init(container) {
+function init$1(container) {
   var stage = document.createElement('canvas');
   stage.context = stage.getContext('2d');
   stage._fontSize = {
@@ -113,7 +113,7 @@ function init(container) {
   return stage;
 }
 
-function clear(stage, comments) {
+function clear$1(stage, comments) {
   stage.context.clearRect(0, 0, stage.width, stage.height);
   // avoid caching canvas to reduce memory usage
   for (var i = 0; i < comments.length; i++) {
@@ -121,7 +121,7 @@ function clear(stage, comments) {
   }
 }
 
-function resize(stage, width, height) {
+function resize$1(stage, width, height) {
   stage.width = width * dpr;
   stage.height = height * dpr;
   stage.style.width = width + 'px';
@@ -150,9 +150,9 @@ function remove(stage, cmt) {
 
 var canvasEngine = {
   name: 'canvas',
-  init: init,
-  clear: clear,
-  resize: resize,
+  init: init$1,
+  clear: clear$1,
+  resize: resize$1,
   framing: framing,
   setup: setup,
   render: render,
@@ -161,58 +161,87 @@ var canvasEngine = {
 
 /* eslint no-invalid-this: 0 */
 function allocate(cmt) {
-  var that = this;
-  var ct = this.media ? this.media.currentTime : Date.now() / 1000;
-  var pbr = this.media ? this.media.playbackRate : 1;
-  function willCollide(cr, cmt) {
-    if (cmt.mode === 'top' || cmt.mode === 'bottom') {
-      return ct - cr.time < that._.duration;
-    }
-    var crTotalWidth = that._.width + cr.width;
-    var crElapsed = crTotalWidth * (ct - cr.time) * pbr / that._.duration;
-    if (cr.width > crElapsed) {
+  const that = this;
+  const ct = that.media ? that.media.currentTime : Date.now() / 1000;
+  const pbr = that.media ? that.media.playbackRate : 1;
+  const mode = cmt.mode;
+
+  // Calculate the number of tracks
+  const trackHeight = cmt.height;
+  const totalHeight = that._.height;
+  const numberOfTracks = Math.floor(totalHeight / trackHeight);
+
+  // Initialize space, if necessary
+  if (!that._.space[mode] || that._.space[mode].length !== numberOfTracks) {
+    that._.space[mode] =
+      new Array(numberOfTracks).fill(null).map(() => ({ time: 0, width: 0, height: 0 }));
+  }
+
+  const tracks = that._.space[mode];
+  let trackIndex = -1;
+
+  // Check if a comment can be placed on a track
+  function canPlaceCommentOnTrack(track, cmt, ct, pbr, mode, _that) {
+    if (!track || !track.time) {
       return true;
     }
-    // (rtl mode) the right end of `cr` move out of left side of stage
-    var crLeftTime = that._.duration + cr.time - ct;
-    var cmtTotalWidth = that._.width + cmt.width;
-    var cmtTime = that.media ? cmt.time : cmt._utc;
-    var cmtElapsed = cmtTotalWidth * (ct - cmtTime) * pbr / that._.duration;
-    var cmtArrival = that._.width - cmtElapsed;
-    // (rtl mode) the left end of `cmt` reach the left side of stage
-    var cmtArrivalTime = that._.duration * cmtArrival / (that._.width + cmt.width);
-    return crLeftTime > cmtArrivalTime;
-  }
-  var crs = this._.space[cmt.mode];
-  var last = 0;
-  var curr = 0;
-  for (var i = 1; i < crs.length; i++) {
-    var cr = crs[i];
-    var requiredRange = cmt.height;
-    if (cmt.mode === 'top' || cmt.mode === 'bottom') {
-      requiredRange += cr.height;
+
+    var elapsedTime = ct - track.time;
+    var duration = _that._.duration / pbr;
+
+    if (mode === 'top' || mode === 'bottom') {
+      // Check if the display time is over
+      return elapsedTime >= duration;
     }
-    if (cr.range - cr.height - crs[last].range >= requiredRange) {
-      curr = i;
+    // Check if the comment will collide with the track
+    var trackDuration = _that._.duration / pbr;
+
+    // Calculate the speed of the comment
+    var trackSpeed = (_that._.width + track.width) / trackDuration;
+
+    // Calculate the current position
+    var cmtPosition = _that._.width;
+    var trackPosition = _that._.width - trackSpeed * elapsedTime;
+
+    // Adjust the direction if the comment is from left to right
+    if (mode === 'ltr') {
+      cmtPosition = -cmt.width;
+      trackPosition = track.width + trackSpeed * elapsedTime;
+      // cmtSpeed = -cmtSpeed;
+      trackSpeed = -trackSpeed;
+    }
+
+    // Check if the comment overlaps with the track
+    if (cmtPosition < trackPosition + track.width) {
+      return false;
+    }
+    return true;
+  }
+
+  // Traverse tracks to find an available track
+  for (let i = 0; i < numberOfTracks; i++) {
+    if (canPlaceCommentOnTrack(tracks[i], cmt, ct, pbr, mode, that)) {
+      trackIndex = i;
       break;
     }
-    if (willCollide(cr, cmt)) {
-      last = i;
-    }
   }
-  var channel = crs[last].range;
-  var crObj = {
-    range: channel + cmt.height,
-    time: this.media ? cmt.time : cmt._utc,
-    width: cmt.width,
-    height: cmt.height
-  };
-  crs.splice(last + 1, curr - last - 1, crObj);
 
-  if (cmt.mode === 'bottom') {
-    return this._.height - cmt.height - channel % this._.height;
+  // If no track is available, return -1
+  if (trackIndex === -1) {
+    return -1;
   }
-  return channel % (this._.height - cmt.height);
+
+  // Update track information
+  tracks[trackIndex] = {
+    time: that.media ? cmt.time : cmt._utc,
+    width: cmt.width,
+    height: cmt.height,
+  };
+
+  // Calculate the vertical position of the comment
+  const yPosition = mode === 'bottom' ? totalHeight - (trackIndex + 1) * trackHeight : trackIndex * trackHeight;
+
+  return yPosition;
 }
 
 /* eslint no-invalid-this: 0 */
@@ -261,6 +290,9 @@ function createEngine(framing, setup, render, remove) {
     }
     for (i = 0; i < this._.runningList.length; i++) {
       cmt = this._.runningList[i];
+      if (cmt.y === -1) {
+        continue;
+      }
       var totalWidth = this._.width + cmt.width;
       var elapsed = totalWidth * (dn - cmt._utc) * pbr / this._.duration;
       if (cmt.mode === 'ltr') cmt.x = (elapsed - cmt.width + .5) | 0;
@@ -324,11 +356,12 @@ function formatMode(mode) {
 }
 
 function collidableRange() {
-  var max = 9007199254740991;
-  return [
-    { range: 0, time: -max, width: max, height: 0 },
-    { range: max, time: max, width: 0, height: 0 }
-  ];
+  // var max = 9007199254740991;
+  // return [
+  //   { range: 0, time: -max, width: max, height: 0 },
+  //   { range: max, time: max, width: 0, height: 0 }
+  // ];
+  return [];
 }
 
 function resetSpace(space) {
@@ -413,7 +446,7 @@ function unbindEvents(_) {
 }
 
 /* eslint-disable no-invalid-this */
-function init$1(opt) {
+function init(opt) {
   this._ = {};
   this.container = opt.container || document.createElement('div');
   this.media = opt.media;
@@ -542,14 +575,14 @@ function hide() {
 }
 
 /* eslint-disable no-invalid-this */
-function clear$1() {
+function clear() {
   this._.engine.clear(this._.stage, this._.runningList);
   this._.runningList = [];
   return this;
 }
 
 /* eslint-disable no-invalid-this */
-function resize$1() {
+function resize() {
   this._.width = this.container.offsetWidth;
   this._.height = this.container.offsetHeight;
   this._.engine.resize(this._.stage, this._.width, this._.height);
@@ -577,7 +610,7 @@ var speed = {
 };
 
 function Danmaku(opt) {
-  opt && init$1.call(this, opt);
+  opt && init.call(this, opt);
 }
 Danmaku.prototype.destroy = function() {
   return destroy.call(this);
@@ -592,11 +625,11 @@ Danmaku.prototype.hide = function() {
   return hide.call(this);
 };
 Danmaku.prototype.clear = function() {
-  return clear$1.call(this);
+  return clear.call(this);
 };
 Danmaku.prototype.resize = function() {
-  return resize$1.call(this);
+  return resize.call(this);
 };
 Object.defineProperty(Danmaku.prototype, 'speed', speed);
 
-export default Danmaku;
+export { Danmaku as default };

@@ -46,6 +46,9 @@ export default function(framing, setup, render, remove) {
     }
     for (i = 0; i < this._.runningList.length; i++) {
       cmt = this._.runningList[i];
+      if (cmt.y === -1) {
+        continue;
+      }
       var totalWidth = this._.width + cmt.width;
       var elapsed = totalWidth * (dn - cmt._utc) * pbr / this._.duration;
       if (cmt.mode === 'ltr') cmt.x = (elapsed - cmt.width + .5) | 0;
