@@ -2,9 +2,9 @@
   typeof exports === 'object' && typeof module !== 'undefined' ? module.exports = factory() :
   typeof define === 'function' && define.amd ? define(factory) :
   (global = typeof globalThis !== 'undefined' ? globalThis : global || self, global.Danmaku = factory());
-}(this, (function () { 'use strict';
+})(this, (function () { 'use strict';
 
-  var transform = (function() {
+  ((function() {
     /* istanbul ignore next */
     if (typeof document === 'undefined') return 'transform';
     var properties = [
@@ -23,7 +23,7 @@
     }
     /* istanbul ignore next */
     return 'transform';
-  }());
+  })());
 
   var dpr = typeof window !== 'undefined' && window.devicePixelRatio || 1;
 
@@ -109,7 +109,7 @@
       .match(/(.+)px/)[1] * 1;
   }
 
-  function init(container) {
+  function init$1(container) {
     var stage = document.createElement('canvas');
     stage.context = stage.getContext('2d');
     stage._fontSize = {
@@ -119,7 +119,7 @@
     return stage;
   }
 
-  function clear(stage, comments) {
+  function clear$1(stage, comments) {
     stage.context.clearRect(0, 0, stage.width, stage.height);
     // avoid caching canvas to reduce memory usage
     for (var i = 0; i < comments.length; i++) {
@@ -127,7 +127,7 @@
     }
   }
 
-  function resize(stage, width, height) {
+  function resize$1(stage, width, height) {
     stage.width = width * dpr;
     stage.height = height * dpr;
     stage.style.width = width + 'px';
@@ -156,9 +156,9 @@
 
   var canvasEngine = {
     name: 'canvas',
-    init: init,
-    clear: clear,
-    resize: resize,
+    init: init$1,
+    clear: clear$1,
+    resize: resize$1,
     framing: framing,
     setup: setup,
     render: render,
@@ -223,9 +223,12 @@
 
   /* eslint no-invalid-this: 0 */
   function createEngine(framing, setup, render, remove) {
-    return function() {
+    return function(_dn) {
       framing(this._.stage);
-      var dn = Date.now() / 1000;
+      var dn = _dn || 0;
+      if (dn === 0) {
+        dn = Date.now() / 1000;
+      }
       var ct = this.media ? this.media.currentTime : dn;
       var pbr = this.media ? this.media.playbackRate : 1;
       var cmt = null;
@@ -269,8 +272,8 @@
         cmt = this._.runningList[i];
         var totalWidth = this._.width + cmt.width;
         var elapsed = totalWidth * (dn - cmt._utc) * pbr / this._.duration;
-        if (cmt.mode === 'ltr') cmt.x = (elapsed - cmt.width + .5) | 0;
-        if (cmt.mode === 'rtl') cmt.x = (this._.width - elapsed + .5) | 0;
+        if (cmt.mode === 'ltr') cmt.x = elapsed - cmt.width;
+        if (cmt.mode === 'rtl') cmt.x = this._.width - elapsed;
         if (cmt.mode === 'top' || cmt.mode === 'bottom') {
           cmt.x = (this._.width - cmt.width) >> 1;
         }
@@ -419,7 +422,7 @@
   }
 
   /* eslint-disable no-invalid-this */
-  function init$1(opt) {
+  function init(opt) {
     this._ = {};
     this.container = opt.container || document.createElement('div');
     this.media = opt.media;
@@ -548,14 +551,14 @@
   }
 
   /* eslint-disable no-invalid-this */
-  function clear$1() {
+  function clear() {
     this._.engine.clear(this._.stage, this._.runningList);
     this._.runningList = [];
     return this;
   }
 
   /* eslint-disable no-invalid-this */
-  function resize$1() {
+  function resize() {
     this._.width = this.container.offsetWidth;
     this._.height = this.container.offsetHeight;
     this._.engine.resize(this._.stage, this._.width, this._.height);
@@ -583,7 +586,7 @@
   };
 
   function Danmaku(opt) {
-    opt && init$1.call(this, opt);
+    opt && init.call(this, opt);
   }
   Danmaku.prototype.destroy = function() {
     return destroy.call(this);
@@ -598,13 +601,13 @@
     return hide.call(this);
   };
   Danmaku.prototype.clear = function() {
-    return clear$1.call(this);
+    return clear.call(this);
   };
   Danmaku.prototype.resize = function() {
-    return resize$1.call(this);
+    return resize.call(this);
   };
   Object.defineProperty(Danmaku.prototype, 'speed', speed);
 
   return Danmaku;
 
-})));
+}));

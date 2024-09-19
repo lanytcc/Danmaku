@@ -38,13 +38,13 @@ function createCommentNode(cmt) {
   return node;
 }
 
-function init() {
+function init$1() {
   var stage = document.createElement('div');
   stage.style.cssText = 'overflow:hidden;white-space:nowrap;transform:translateZ(0);';
   return stage;
 }
 
-function clear(stage) {
+function clear$1(stage) {
   var lc = stage.lastChild;
   while (lc) {
     stage.removeChild(lc);
@@ -52,7 +52,7 @@ function clear(stage) {
   }
 }
 
-function resize(stage, width, height) {
+function resize$1(stage, width, height) {
   stage.style.width = width + 'px';
   stage.style.height = height + 'px';
 }
@@ -95,9 +95,9 @@ function remove(stage, cmt) {
 
 var domEngine = {
   name: 'dom',
-  init: init,
-  clear: clear,
-  resize: resize,
+  init: init$1,
+  clear: clear$1,
+  resize: resize$1,
   framing: framing,
   setup: setup,
   render: render,
@@ -162,9 +162,12 @@ function allocate(cmt) {
 
 /* eslint no-invalid-this: 0 */
 function createEngine(framing, setup, render, remove) {
-  return function() {
+  return function(_dn) {
     framing(this._.stage);
-    var dn = Date.now() / 1000;
+    var dn = _dn || 0;
+    if (dn === 0) {
+      dn = Date.now() / 1000;
+    }
     var ct = this.media ? this.media.currentTime : dn;
     var pbr = this.media ? this.media.playbackRate : 1;
     var cmt = null;
@@ -208,8 +211,8 @@ function createEngine(framing, setup, render, remove) {
       cmt = this._.runningList[i];
       var totalWidth = this._.width + cmt.width;
       var elapsed = totalWidth * (dn - cmt._utc) * pbr / this._.duration;
-      if (cmt.mode === 'ltr') cmt.x = (elapsed - cmt.width + .5) | 0;
-      if (cmt.mode === 'rtl') cmt.x = (this._.width - elapsed + .5) | 0;
+      if (cmt.mode === 'ltr') cmt.x = elapsed - cmt.width;
+      if (cmt.mode === 'rtl') cmt.x = this._.width - elapsed;
       if (cmt.mode === 'top' || cmt.mode === 'bottom') {
         cmt.x = (this._.width - cmt.width) >> 1;
       }
@@ -358,7 +361,7 @@ function unbindEvents(_) {
 }
 
 /* eslint-disable no-invalid-this */
-function init$1(opt) {
+function init(opt) {
   this._ = {};
   this.container = opt.container || document.createElement('div');
   this.media = opt.media;
@@ -489,14 +492,14 @@ function hide() {
 }
 
 /* eslint-disable no-invalid-this */
-function clear$1() {
+function clear() {
   this._.engine.clear(this._.stage, this._.runningList);
   this._.runningList = [];
   return this;
 }
 
 /* eslint-disable no-invalid-this */
-function resize$1() {
+function resize() {
   this._.width = this.container.offsetWidth;
   this._.height = this.container.offsetHeight;
   this._.engine.resize(this._.stage, this._.width, this._.height);
@@ -524,7 +527,7 @@ var speed = {
 };
 
 function Danmaku(opt) {
-  opt && init$1.call(this, opt);
+  opt && init.call(this, opt);
 }
 Danmaku.prototype.destroy = function() {
   return destroy.call(this);
@@ -539,11 +542,11 @@ Danmaku.prototype.hide = function() {
   return hide.call(this);
 };
 Danmaku.prototype.clear = function() {
-  return clear$1.call(this);
+  return clear.call(this);
 };
 Danmaku.prototype.resize = function() {
-  return resize$1.call(this);
+  return resize.call(this);
 };
 Object.defineProperty(Danmaku.prototype, 'speed', speed);
 
-export default Danmaku;
+export { Danmaku as default };
