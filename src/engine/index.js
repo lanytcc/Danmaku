@@ -1,18 +1,42 @@
 import allocate from '../internal/allocate.js';
 
 /* eslint no-invalid-this: 0 */
+
+/**
+ * Danmaku animation function to calculate and update the positions of comments.
+ * @param {Function} framing - Function to handle the framing of the stage.
+ * @param {Function} setup - Function to set up new comments.
+ * @param {Function} render - Function to render comments on the stage.
+ * @param {Function} remove - Function to remove comments from the stage.
+ * @returns {Function} - The animation function to be called with a timestamp.
+ */
 export default function(framing, setup, render, remove) {
-  return function() {
+  return function animate(_timestamp) {
+    // If timestamp is not provided, use performance.now()
+    let timestamp = _timestamp;
+    if (typeof timestamp === 'undefined') {
+      timestamp = Date.now();
+    }
+
+    // Handle the framing of the stage
     framing(this._.stage);
-    const dn = Date.now() / 1000;
+    // Convert timestamp to seconds for consistency
+    const dn = timestamp / 1000;
+    // Get current time from media or use the timestamp
     const ct = this.media ? this.media.currentTime : dn;
+    // Get playback rate, default to 1 if no media
     const pbr = this.media ? this.media.playbackRate : 1;
-    var cmt = null;
-    var cmtt = 0;
-    var i = 0;
+
+    let cmt = null;
+    let cmtt = 0;
+    let i = 0;
+
+    // Iterate through running comments in reverse order to remove expired ones
     for (i = this._.runningList.length - 1; i >= 0; i--) {
       cmt = this._.runningList[i];
       cmtt = this.media ? cmt.time : cmt._utc;
+
+      // Calculate elapsed time for the comment
       const elapsedTime = (dn - cmt._utc) * pbr;
 
       let shouldRemove = false;
@@ -39,34 +63,41 @@ export default function(framing, setup, render, remove) {
         this._.runningList.splice(i, 1);
       }
     }
-    var pendingList = [];
+
+    const pendingList = [];
+
+    // Add new comments that should appear at the current time
     while (this._.position < this.comments.length) {
       cmt = this.comments[this._.position];
       cmtt = this.media ? cmt.time : cmt._utc;
+      // Break if the comment time is in the future
       if (cmtt >= ct) {
         break;
       }
-      // when clicking controls to seek, media.currentTime may changed before
-      // `pause` event is fired, so here skips comments out of duration,
-      // see https://github.com/weizhenye/Danmaku/pull/30 for details.
+      // Skip comments that are out of duration
       if (ct - cmtt > this._.duration) {
         ++this._.position;
         continue;
       }
       if (this.media) {
+        // Synchronize the comment's UTC time with the media's current time
         cmt._utc = dn - (this.media.currentTime - cmt.time);
       }
       pendingList.push(cmt);
       ++this._.position;
     }
+    // Set up new comments
     setup(this._.stage, pendingList);
+    // Allocate positions for new comments and add them to the running list
     for (i = 0; i < pendingList.length; i++) {
       cmt = pendingList[i];
       cmt.y = allocate.call(this, cmt);
       this._.runningList.push(cmt);
     }
+    // Update positions of running comments
     for (i = 0; i < this._.runningList.length; i++) {
       cmt = this._.runningList[i];
+      // Skip if the comment is not allocated a position
       if (cmt.y === -1) {
         continue;
       }
@@ -76,15 +107,19 @@ export default function(framing, setup, render, remove) {
 
       if (cmt.mode === 'ltr') {
         // Start from -cmt.width and move to this._.width
-        cmt.x = (-cmt.width + distanceTraveled + 0.5) | 0;
-      }
-      if (cmt.mode === 'rtl') {
+        cmt.x = -cmt.width + distanceTraveled;
+      } else if (cmt.mode === 'rtl') {
         // Start from this._.width and move to -cmt.width
-        cmt.x = (this._.width - distanceTraveled + 0.5) | 0;
+        cmt.x = this._.width - distanceTraveled;
+      } else if (cmt.mode === 'top' || cmt.mode === 'bottom') {
+        // Center the comment horizontally
+        cmt.x = (this._.width - cmt.width) / 2;
       }
-      if (cmt.mode === 'top' || cmt.mode === 'bottom') {
-        cmt.x = (this._.width - cmt.width) >> 1;
+      // If using DOM elements, use CSS transforms for smoother rendering
+      if (cmt.element && cmt.element.style) {
+        cmt.element.style.transform = `translate(${cmt.x}px, ${cmt.y}px)`;
       }
+      // Render the comment
       render(this._.stage, cmt);
     }
   };
