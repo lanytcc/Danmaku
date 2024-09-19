@@ -259,7 +259,7 @@ function allocate(cmt) {
   // Initialize space, if necessary
   if (!that._.space[mode] || that._.space[mode].length !== numberOfTracks) {
     that._.space[mode] =
-      new Array(numberOfTracks).fill(null).map(() => ({ time: 0, width: 0, height: 0 }));
+      new Array(numberOfTracks).fill(null).map(() => ({ endTime: 0 }));
   }
 
   const tracks = that._.space[mode];
@@ -267,37 +267,62 @@ function allocate(cmt) {
 
   // Check if a comment can be placed on a track
   function canPlaceCommentOnTrack(track, cmt, ct, pbr, mode, _that) {
-    if (!track || !track.time) {
+    if (!track || !track.endTime) {
       return true;
     }
 
-    var elapsedTime = ct - track.time;
-    var duration = _that._.duration / pbr;
+    // Check if the previous comment has exited the screen
+    if (ct >= track.endTime) {
+      return true;
+    }
+    // For scrolling comments, check for collision based on positions
+    if (mode === 'ltr' || mode === 'rtl') {
+      // Since all comments move at the same speed, we need to ensure that
+      // the new comment will not overlap with the existing one on this track.
+      const elapsedTimeSinceTrackStart = ct - track.startTime;
+      const elapsedTimeSinceCmtStart = ct - cmt.time;
+      const totalDuration = _that._.duration / pbr;
+      const screenWidth = _that._.width;
+      // Calculate positions
+      const trackCommentDistance = (elapsedTimeSinceTrackStart / totalDuration) * screenWidth;
+      const newCommentDistance = (elapsedTimeSinceCmtStart / totalDuration) * screenWidth;
 
+      let trackCommentStart = 0;
+      let trackCommentEnd = 0;
+      let newCommentStart = 0;
+      let newCommentEnd = 0;
+
+      if (mode === 'rtl') {
+        // For 'rtl', comments move from right to left
+        trackCommentStart = _that._.width - trackCommentDistance;
+        trackCommentEnd = trackCommentStart + track.width;
+
+        newCommentStart = _that._.width - newCommentDistance;
+        newCommentEnd = newCommentStart + cmt.width;
+      } else {
+        // For 'ltr', comments move from left to right
+        trackCommentEnd = -track.width + trackCommentDistance;
+        trackCommentStart = trackCommentEnd - track.width;
+
+        newCommentEnd = -cmt.width + newCommentDistance;
+        newCommentStart = newCommentEnd - cmt.width;
+      }
+
+      // Check if the bounding boxes of the two comments overlap
+      if (
+        (newCommentStart < trackCommentEnd && newCommentEnd > trackCommentStart) ||
+        (newCommentEnd > trackCommentStart && newCommentStart < trackCommentEnd)
+      ) {
+        return false;
+      }
+    }
+
+    // For 'top' and 'bottom' modes, ensure that the display time has elapsed
     if (mode === 'top' || mode === 'bottom') {
-      // Check if the display time is over
-      return elapsedTime >= duration;
-    }
-    // Check if the comment will collide with the track
-    var trackDuration = _that._.duration / pbr;
-
-    // Calculate the speed of the comment
-    var trackSpeed = (_that._.width + track.width) / trackDuration;
-
-    // Calculate the current position
-    var cmtPosition = _that._.width;
-    var trackPosition = _that._.width - trackSpeed * elapsedTime;
-
-    // Adjust the direction if the comment is from left to right
-    if (mode === 'ltr') {
-      cmtPosition = -cmt.width;
-      trackPosition = track.width + trackSpeed * elapsedTime;
-      // cmtSpeed = -cmtSpeed;
-      trackSpeed = -trackSpeed;
-    }
-
-    // Check if the comment overlaps with the track
-    if (cmtPosition < trackPosition + track.width) {
+      const duration = _that._.duration / pbr;
+      if (ct - track.startTime >= duration) {
+        return true;
+      }
       return false;
     }
     return true;
@@ -305,7 +330,8 @@ function allocate(cmt) {
 
   // Traverse tracks to find an available track
   for (let i = 0; i < numberOfTracks; i++) {
-    if (canPlaceCommentOnTrack(tracks[i], cmt, ct, pbr, mode, that)) {
+    const track = tracks[i];
+    if (canPlaceCommentOnTrack(track, cmt, ct, pbr, mode, that)) {
       trackIndex = i;
       break;
     }
@@ -317,14 +343,21 @@ function allocate(cmt) {
   }
 
   // Update track information
+  const startTime = that.media ? cmt.time : cmt._utc;
+  const endTime = startTime + (that._.duration / pbr);
+
   tracks[trackIndex] = {
-    time: that.media ? cmt.time : cmt._utc,
+    startTime: startTime,
+    endTime: endTime,
     width: cmt.width,
     height: cmt.height,
   };
 
   // Calculate the vertical position of the comment
-  const yPosition = mode === 'bottom' ? totalHeight - (trackIndex + 1) * trackHeight : trackIndex * trackHeight;
+  const yPosition =
+    mode === 'bottom'
+      ? totalHeight - (trackIndex + 1) * trackHeight
+      : trackIndex * trackHeight;
 
   return yPosition;
 }
@@ -342,7 +375,28 @@ function createEngine(framing, setup, render, remove) {
     for (i = this._.runningList.length - 1; i >= 0; i--) {
       cmt = this._.runningList[i];
       cmtt = this.media ? cmt.time : cmt._utc;
-      if (ct - cmtt > this._.duration) {
+      let elapsedTime = (dn - cmt._utc) * pbr;
+
+      let shouldRemove = false;
+
+      if (cmt.mode === 'top' || cmt.mode === 'bottom') {
+        // Time-based removal for static comments
+        if (elapsedTime > this._.duration) {
+          shouldRemove = true;
+        }
+      } else if (cmt.mode === 'ltr') {
+        // Remove when comment has moved off the right side of the screen
+        if (cmt.x > this._.width) {
+          shouldRemove = true;
+        }
+      } else if (cmt.mode === 'rtl') {
+        // Remove when comment has moved off the left side of the screen
+        if (cmt.x + cmt.width < 0) {
+          shouldRemove = true;
+        }
+      }
+
+      if (shouldRemove) {
         remove(this._.stage, cmt);
         this._.runningList.splice(i, 1);
       }
@@ -378,10 +432,18 @@ function createEngine(framing, setup, render, remove) {
       if (cmt.y === -1) {
         continue;
       }
-      var totalWidth = this._.width + cmt.width;
-      var elapsed = totalWidth * (dn - cmt._utc) * pbr / this._.duration;
-      if (cmt.mode === 'ltr') cmt.x = (elapsed - cmt.width + .5) | 0;
-      if (cmt.mode === 'rtl') cmt.x = (this._.width - elapsed + .5) | 0;
+      let elapsedTime = (dn - cmt._utc) * pbr;
+      let progress = elapsedTime / this._.duration;
+      let distanceTraveled = this._.width * progress;
+
+      if (cmt.mode === 'ltr') {
+        // Start from -cmt.width and move to this._.width
+        cmt.x = (-cmt.width + distanceTraveled + 0.5) | 0;
+      }
+      if (cmt.mode === 'rtl') {
+        // Start from this._.width and move to -cmt.width
+        cmt.x = (this._.width - distanceTraveled + 0.5) | 0;
+      }
       if (cmt.mode === 'top' || cmt.mode === 'bottom') {
         cmt.x = (this._.width - cmt.width) >> 1;
       }
