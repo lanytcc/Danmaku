@@ -2,12 +2,13 @@ import allocate from '../internal/allocate.js';
 
 /* eslint no-invalid-this: 0 */
 export default function(framing, setup, render, remove) {
-  return function(_dn) {
-    framing(this._.stage);
-    var dn = _dn || 0;
-    if (dn === 0) {
-      dn = Date.now() / 1000;
+  return function(_timestamp) {
+    let timestamp = _timestamp;
+    if (typeof timestamp === 'undefined') {
+      timestamp = Date.now();
     }
+    framing(this._.stage);
+    var dn = timestamp / 1000;
     var ct = this.media ? this.media.currentTime : dn;
     var pbr = this.media ? this.media.playbackRate : 1;
     var cmt = null;

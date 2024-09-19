@@ -20,8 +20,8 @@ export default function() {
     this._.engine.render.bind(this),
     this._.engine.remove.bind(this)
   );
-  function frame() {
-    engine.call(that);
+  function frame(timestamp) {
+    engine.call(that, timestamp);
     that._.requestID = raf(frame);
   }
   this._.requestID = raf(frame);

@@ -162,12 +162,13 @@ function allocate(cmt) {
 
 /* eslint no-invalid-this: 0 */
 function createEngine(framing, setup, render, remove) {
-  return function(_dn) {
-    framing(this._.stage);
-    var dn = _dn || 0;
-    if (dn === 0) {
-      dn = Date.now() / 1000;
+  return function(_timestamp) {
+    let timestamp = _timestamp;
+    if (typeof timestamp === 'undefined') {
+      timestamp = Date.now();
     }
+    framing(this._.stage);
+    var dn = timestamp / 1000;
     var ct = this.media ? this.media.currentTime : dn;
     var pbr = this.media ? this.media.playbackRate : 1;
     var cmt = null;
@@ -305,8 +306,8 @@ function play() {
     this._.engine.render.bind(this),
     this._.engine.remove.bind(this)
   );
-  function frame() {
-    engine.call(that);
+  function frame(timestamp) {
+    engine.call(that, timestamp);
     that._.requestID = raf(frame);
   }
   this._.requestID = raf(frame);
