@@ -1,130 +1,122 @@
-var dpr = typeof window !== 'undefined' && window.devicePixelRatio || 1;
-
-export var canvasHeightCache = Object.create(null);
-
-export function canvasHeight(font, fontSize) {
-  if (canvasHeightCache[font]) {
-    return canvasHeightCache[font];
-  }
-  var height = 12;
-  var regex = /(\d+(?:\.\d+)?)(px|%|em|rem)(?:\s*\/\s*(\d+(?:\.\d+)?)(px|%|em|rem)?)?/;
-  var p = font.match(regex);
-  if (p) {
-    var fs = p[1] * 1 || 10;
-    var fsu = p[2];
-    var lh = p[3] * 1 || 1.2;
-    var lhu = p[4];
-    if (fsu === '%') fs *= fontSize.container / 100;
-    if (fsu === 'em') fs *= fontSize.container;
-    if (fsu === 'rem') fs *= fontSize.root;
-    if (lhu === 'px') height = lh;
-    if (lhu === '%') height = fs * lh / 100;
-    if (lhu === 'em') height = fs * lh;
-    if (lhu === 'rem') height = fontSize.root * lh;
-    if (lhu === undefined) height = fs * lh;
-  }
-  canvasHeightCache[font] = height;
-  return height;
-}
-
-export function createCommentCanvas(cmt, fontSize) {
-  if (typeof cmt.render === 'function') {
-    var cvs = cmt.render();
-    if (cvs instanceof HTMLCanvasElement) {
-      cmt.width = cvs.width;
-      cmt.height = cvs.height;
-      return cvs;
-    }
-  }
-  var canvas = document.createElement('canvas');
-  var ctx = canvas.getContext('2d');
-  var style = cmt.style || {};
-  style.font = style.font || '10px sans-serif';
-  style.textBaseline = style.textBaseline || 'bottom';
-  var strokeWidth = style.lineWidth * 1;
-  strokeWidth = (strokeWidth > 0 && strokeWidth !== Infinity)
-    ? Math.ceil(strokeWidth)
-    : !!style.strokeStyle * 1;
-  ctx.font = style.font;
-  cmt.width = cmt.width ||
-    Math.max(1, Math.ceil(ctx.measureText(cmt.text).width) + strokeWidth * 2);
-  cmt.height = cmt.height ||
-    Math.ceil(canvasHeight(style.font, fontSize)) + strokeWidth * 2;
-  canvas.width = cmt.width * dpr;
-  canvas.height = cmt.height * dpr;
-  ctx.scale(dpr, dpr);
-  for (var key in style) {
-    ctx[key] = style[key];
-  }
-  var baseline = 0;
-  switch (style.textBaseline) {
-    case 'top':
-    case 'hanging':
-      baseline = strokeWidth;
-      break;
-    case 'middle':
-      baseline = cmt.height >> 1;
-      break;
-    default:
-      baseline = cmt.height - strokeWidth;
-  }
-  if (style.strokeStyle) {
-    ctx.strokeText(cmt.text, strokeWidth, baseline);
-  }
-  ctx.fillText(cmt.text, strokeWidth, baseline);
-  return canvas;
-}
+import * as PIXI from 'pixi.js';
 
 function computeFontSize(el) {
-  return window
-    .getComputedStyle(el, null)
-    .getPropertyValue('font-size')
-    .match(/(.+)px/)[1] * 1;
+  return (
+    window
+      .getComputedStyle(el, null)
+      .getPropertyValue('font-size')
+      .match(/(.+)px/)[1] * 1
+  );
 }
 
 export function init(container) {
-  var stage = document.createElement('canvas');
-  stage.context = stage.getContext('2d');
-  stage._fontSize = {
+  const app = new PIXI.Application({
+    resizeTo: container,
+    antialias: true,
+    autoDensity: true,
+    resolution: window.devicePixelRatio || 1,
+  });
+  container.appendChild(app.view);
+  app._fontSize = {
     root: computeFontSize(document.getElementsByTagName('html')[0]),
-    container: computeFontSize(container)
+    container: computeFontSize(container),
   };
-  return stage;
+  return app;
 }
 
-export function clear(stage, comments) {
-  stage.context.clearRect(0, 0, stage.width, stage.height);
-  // avoid caching canvas to reduce memory usage
-  for (var i = 0; i < comments.length; i++) {
-    comments[i].canvas = null;
+export function clear(app, comments) {
+  app.stage.removeChildren();
+  // Avoid caching text objects to reduce memory usage
+  for (let i = 0; i < comments.length; i++) {
+    comments[i].pixiText = null;
   }
 }
 
-export function resize(stage, width, height) {
-  stage.width = width * dpr;
-  stage.height = height * dpr;
-  stage.style.width = width + 'px';
-  stage.style.height = height + 'px';
+export function resize(app, width, height) {
+  app.renderer.resize(width, height);
+  app.view.style.width = width + 'px';
+  app.view.style.height = height + 'px';
 }
 
-export function framing(stage) {
-  stage.context.clearRect(0, 0, stage.width, stage.height);
+export function framing(app) {
+  // No action needed, PixiJS handles rendering in the ticker
 }
 
-export function setup(stage, comments) {
-  for (var i = 0; i < comments.length; i++) {
-    var cmt = comments[i];
-    cmt.canvas = createCommentCanvas(cmt, stage._fontSize);
+export function setup(app, comments) {
+  for (let i = 0; i < comments.length; i++) {
+    const cmt = comments[i];
+    cmt.pixiText = createCommentText(cmt, app._fontSize);
   }
 }
 
-export function render(stage, cmt) {
-  stage.context.drawImage(cmt.canvas, cmt.x * dpr, cmt.y * dpr);
+function createCommentText(cmt, fontSize) {
+  const style = cmt.style || {};
+
+  // Handle font size with units
+  let fontSizeValue = style.fontSize || '10px';
+  if (typeof fontSizeValue === 'string') {
+    const sizeMatch = fontSizeValue.match(/(\d+(?:\.\d+)?)(px|%|em|rem)?/);
+    let size = parseFloat(sizeMatch[1]);
+    const unit = sizeMatch[2] || 'px';
+
+    switch (unit) {
+      case '%':
+        size = (size / 100) * fontSize.container;
+        break;
+      case 'em':
+        size *= fontSize.container;
+        break;
+      case 'rem':
+        size *= fontSize.root;
+        break;
+      // 'px' and default case
+      default:
+        break;
+    }
+    fontSizeValue = size;
+  }
+
+  const textStyle = new PIXI.TextStyle({
+    fontFamily: style.fontFamily || 'sans-serif',
+    fontSize: fontSizeValue,
+    fill: style.fill || '#000000',
+    stroke: style.strokeStyle || '#000000',
+    strokeThickness: style.lineWidth || 0,
+    align: style.align || 'left',
+  });
+
+  const pixiText = new PIXI.Text(cmt.text, textStyle);
+  cmt.width = cmt.width || pixiText.width;
+  cmt.height = cmt.height || pixiText.height;
+
+  // Set anchor based on textBaseline
+  switch (style.textBaseline) {
+    case 'top':
+      pixiText.anchor.y = 0;
+      break;
+    case 'middle':
+      pixiText.anchor.y = 0.5;
+      break;
+    case 'bottom':
+    default:
+      pixiText.anchor.y = 1;
+      break;
+  }
+
+  return pixiText;
 }
 
-export function remove(stage, cmt) {
-  // avoid caching canvas to reduce memory usage
-  cmt.canvas = null;
+export function render(app, cmt) {
+  cmt.pixiText.position.set(cmt.x, cmt.y);
+  app.stage.addChild(cmt.pixiText);
+}
+
+export function remove(app, cmt) {
+  if (cmt.pixiText && cmt.pixiText.parent) {
+    cmt.pixiText.parent.removeChild(cmt.pixiText);
+  }
+  cmt.pixiText.destroy();
+  cmt.pixiText = null;
 }
 
 export default {

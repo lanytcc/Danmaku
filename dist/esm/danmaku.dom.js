@@ -1,3 +1,5 @@
+import 'pixi.js';
+
 var transform = (function() {
   /* istanbul ignore next */
   if (typeof document === 'undefined') return 'transform';
@@ -432,8 +434,8 @@ function play() {
     this._.engine.render.bind(this),
     this._.engine.remove.bind(this)
   );
-  function frame() {
-    engine.call(that);
+  function frame(timestamp) {
+    engine.call(that, timestamp);
     that._.requestID = raf(frame);
   }
   this._.requestID = raf(frame);

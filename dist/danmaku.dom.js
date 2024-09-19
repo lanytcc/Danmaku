@@ -1,6 +1,6 @@
 (function (global, factory) {
-  typeof exports === 'object' && typeof module !== 'undefined' ? module.exports = factory() :
-  typeof define === 'function' && define.amd ? define(factory) :
+  typeof exports === 'object' && typeof module !== 'undefined' ? module.exports = factory(require('pixi.js')) :
+  typeof define === 'function' && define.amd ? define(['pixi.js'], factory) :
   (global = typeof globalThis !== 'undefined' ? globalThis : global || self, global.Danmaku = factory());
 })(this, (function () { 'use strict';
 
@@ -438,8 +438,8 @@
       this._.engine.render.bind(this),
       this._.engine.remove.bind(this)
     );
-    function frame() {
-      engine.call(that);
+    function frame(timestamp) {
+      engine.call(that, timestamp);
       that._.requestID = raf(frame);
     }
     this._.requestID = raf(frame);
