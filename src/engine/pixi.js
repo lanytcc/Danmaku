@@ -1,28 +1,26 @@
 import * as PIXI from 'pixi.js';
 
-const dpr = typeof window !== 'undefined' && window.devicePixelRatio || 1;
+const dpr = window.devicePixelRatio || 1;
 
 function computeFontSize(el) {
-  return parseFloat(
-    window.getComputedStyle(el).getPropertyValue('font-size')
-  );
+  return parseFloat(window.getComputedStyle(el).getPropertyValue('font-size'));
 }
 
 export function init(container) {
   const app = new PIXI.Application({
-    width: container.clientWidth * dpr,
-    height: container.clientHeight * dpr,
-    backgroundAlpha: 0, // Transparent background
+    width: container.clientWidth,
+    height: container.clientHeight,
+    backgroundAlpha: 0,
     antialias: true,
     resolution: dpr,
     autoDensity: true,
+    autoStart: false, // Disable automatic rendering
   });
   app._fontSize = {
     root: computeFontSize(document.documentElement),
     container: computeFontSize(container),
   };
-  app.view._app = app; // Attach app to view for later reference
-  app.stage.scale.set(1 / dpr, 1 / dpr); // Scale down for high-DPI displays
+  app.view._app = app;
   return app.view;
 }
 
@@ -36,12 +34,12 @@ export function clear(stage, comments) {
 
 export function resize(stage, width, height) {
   const app = stage._app;
-  app.renderer.resize(width * dpr, height * dpr);
-  app.stage.scale.set(1 / dpr, 1 / dpr);
+  app.renderer.resize(width, height);
 }
 
 export function framing(stage) {
-  // No action needed; Pixi.js handles rendering
+  const app = stage._app;
+  app.render();
 }
 
 function parseFont(font, fontSize) {
