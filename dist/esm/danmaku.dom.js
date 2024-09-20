@@ -1,3 +1,5 @@
+import * as PIXI from 'pixi.js';
+
 var transform = (function() {
   /* istanbul ignore next */
   if (typeof document === 'undefined') return 'transform';
@@ -38,13 +40,13 @@ function createCommentNode(cmt) {
   return node;
 }
 
-function init() {
+function init$3() {
   var stage = document.createElement('div');
   stage.style.cssText = 'overflow:hidden;white-space:nowrap;transform:translateZ(0);';
   return stage;
 }
 
-function clear(stage) {
+function clear$3(stage) {
   var lc = stage.lastChild;
   while (lc) {
     stage.removeChild(lc);
@@ -52,16 +54,16 @@ function clear(stage) {
   }
 }
 
-function resize(stage, width, height) {
+function resize$3(stage, width, height) {
   stage.style.width = width + 'px';
   stage.style.height = height + 'px';
 }
 
-function framing() {
+function framing$2() {
   //
 }
 
-function setup(stage, comments) {
+function setup$2(stage, comments) {
   var df = document.createDocumentFragment();
   var i = 0;
   var cmt = null;
@@ -80,12 +82,12 @@ function setup(stage, comments) {
   }
 }
 
-function render(stage, cmt) {
+function render$2(stage, cmt) {
   cmt.node.style[transform] = 'translate(' + cmt.x + 'px,' + cmt.y + 'px)';
 }
 
 /* eslint no-invalid-this: 0 */
-function remove(stage, cmt) {
+function remove$2(stage, cmt) {
   stage.removeChild(cmt.node);
   /* istanbul ignore else */
   if (!this.media) {
@@ -95,13 +97,288 @@ function remove(stage, cmt) {
 
 var domEngine = {
   name: 'dom',
-  init: init,
-  clear: clear,
-  resize: resize,
-  framing: framing,
-  setup: setup,
-  render: render,
-  remove: remove,
+  init: init$3,
+  clear: clear$3,
+  resize: resize$3,
+  framing: framing$2,
+  setup: setup$2,
+  render: render$2,
+  remove: remove$2,
+};
+
+var dpr$1 = typeof window !== 'undefined' && window.devicePixelRatio || 1;
+
+var canvasHeightCache = Object.create(null);
+
+function canvasHeight(font, fontSize) {
+  if (canvasHeightCache[font]) {
+    return canvasHeightCache[font];
+  }
+  var height = 12;
+  var regex = /(\d+(?:\.\d+)?)(px|%|em|rem)(?:\s*\/\s*(\d+(?:\.\d+)?)(px|%|em|rem)?)?/;
+  var p = font.match(regex);
+  if (p) {
+    var fs = p[1] * 1 || 10;
+    var fsu = p[2];
+    var lh = p[3] * 1 || 1.2;
+    var lhu = p[4];
+    if (fsu === '%') fs *= fontSize.container / 100;
+    if (fsu === 'em') fs *= fontSize.container;
+    if (fsu === 'rem') fs *= fontSize.root;
+    if (lhu === 'px') height = lh;
+    if (lhu === '%') height = fs * lh / 100;
+    if (lhu === 'em') height = fs * lh;
+    if (lhu === 'rem') height = fontSize.root * lh;
+    if (lhu === undefined) height = fs * lh;
+  }
+  canvasHeightCache[font] = height;
+  return height;
+}
+
+function createCommentCanvas(cmt, fontSize) {
+  if (typeof cmt.render === 'function') {
+    var cvs = cmt.render();
+    if (cvs instanceof HTMLCanvasElement) {
+      cmt.width = cvs.width;
+      cmt.height = cvs.height;
+      return cvs;
+    }
+  }
+  var canvas = document.createElement('canvas');
+  var ctx = canvas.getContext('2d');
+  var style = cmt.style || {};
+  style.font = style.font || '10px sans-serif';
+  style.textBaseline = style.textBaseline || 'bottom';
+  var strokeWidth = style.lineWidth * 1;
+  strokeWidth = (strokeWidth > 0 && strokeWidth !== Infinity)
+    ? Math.ceil(strokeWidth)
+    : !!style.strokeStyle * 1;
+  ctx.font = style.font;
+  cmt.width = cmt.width ||
+    Math.max(1, Math.ceil(ctx.measureText(cmt.text).width) + strokeWidth * 2);
+  cmt.height = cmt.height ||
+    Math.ceil(canvasHeight(style.font, fontSize)) + strokeWidth * 2;
+  canvas.width = cmt.width * dpr$1;
+  canvas.height = cmt.height * dpr$1;
+  ctx.scale(dpr$1, dpr$1);
+  for (var key in style) {
+    ctx[key] = style[key];
+  }
+  var baseline = 0;
+  switch (style.textBaseline) {
+    case 'top':
+    case 'hanging':
+      baseline = strokeWidth;
+      break;
+    case 'middle':
+      baseline = cmt.height >> 1;
+      break;
+    default:
+      baseline = cmt.height - strokeWidth;
+  }
+  if (style.strokeStyle) {
+    ctx.strokeText(cmt.text, strokeWidth, baseline);
+  }
+  ctx.fillText(cmt.text, strokeWidth, baseline);
+  return canvas;
+}
+
+function computeFontSize$1(el) {
+  return window
+    .getComputedStyle(el, null)
+    .getPropertyValue('font-size')
+    .match(/(.+)px/)[1] * 1;
+}
+
+function init$2(container) {
+  var stage = document.createElement('canvas');
+  stage.context = stage.getContext('2d');
+  stage._fontSize = {
+    root: computeFontSize$1(document.getElementsByTagName('html')[0]),
+    container: computeFontSize$1(container)
+  };
+  return stage;
+}
+
+function clear$2(stage, comments) {
+  stage.context.clearRect(0, 0, stage.width, stage.height);
+  // avoid caching canvas to reduce memory usage
+  for (var i = 0; i < comments.length; i++) {
+    comments[i].canvas = null;
+  }
+}
+
+function resize$2(stage, width, height) {
+  stage.width = width * dpr$1;
+  stage.height = height * dpr$1;
+  stage.style.width = width + 'px';
+  stage.style.height = height + 'px';
+}
+
+function framing$1(stage) {
+  stage.context.clearRect(0, 0, stage.width, stage.height);
+}
+
+function setup$1(stage, comments) {
+  for (var i = 0; i < comments.length; i++) {
+    var cmt = comments[i];
+    cmt.canvas = createCommentCanvas(cmt, stage._fontSize);
+  }
+}
+
+function render$1(stage, cmt) {
+  stage.context.drawImage(cmt.canvas, cmt.x * dpr$1, cmt.y * dpr$1);
+}
+
+function remove$1(stage, cmt) {
+  // avoid caching canvas to reduce memory usage
+  cmt.canvas = null;
+}
+
+var canvasEngine = {
+  name: 'canvas',
+  init: init$2,
+  clear: clear$2,
+  resize: resize$2,
+  framing: framing$1,
+  setup: setup$1,
+  render: render$1,
+  remove: remove$1,
+};
+
+const dpr = window.devicePixelRatio || 1;
+
+function computeFontSize(el) {
+  return parseFloat(window.getComputedStyle(el).getPropertyValue('font-size'));
+}
+
+function init$1(container) {
+  const app = new PIXI.Application({
+    width: container.clientWidth,
+    height: container.clientHeight,
+    backgroundAlpha: 0,
+    antialias: true,
+    resolution: dpr,
+    autoDensity: true,
+    autoStart: false, // Disable automatic rendering
+  });
+  app._fontSize = {
+    root: computeFontSize(document.documentElement),
+    container: computeFontSize(container),
+  };
+  app.view._app = app;
+  return app.view;
+}
+
+function clear$1(stage, comments) {
+  const app = stage._app;
+  app.stage.removeChildren();
+  comments.forEach((cmt) => {
+    cmt.sprite = null;
+  });
+}
+
+function resize$1(stage, width, height) {
+  const app = stage._app;
+  app.renderer.resize(width, height);
+}
+
+function framing(stage) {
+  const app = stage._app;
+  app.render();
+}
+
+function parseFont(font, fontSize) {
+  let fontSizeValue = 10;
+  const regex = /(\d+(?:\.\d+)?)(px|%|em|rem)/;
+  const match = font.match(regex);
+  if (match) {
+    fontSizeValue = parseFloat(match[1]);
+    const unit = match[2];
+    if (unit === '%') fontSizeValue *= fontSize.container / 100;
+    if (unit === 'em') fontSizeValue *= fontSize.container;
+    if (unit === 'rem') fontSizeValue *= fontSize.root;
+  }
+  return fontSizeValue;
+}
+
+function createCommentSprite(cmt, fontSize) {
+  const defaultStyle = {
+    font: '10px sans-serif',
+    fillStyle: '#ffffff',
+    textBaseline: 'bottom',
+  };
+  const style = { ...defaultStyle, ...cmt.style };
+  const fontSizeValue = parseFont(style.font, fontSize);
+
+  const textStyle = new PIXI.TextStyle({
+    fontFamily: style.fontFamily || 'sans-serif',
+    fontSize: fontSizeValue,
+    fill: style.fillStyle || '#ffffff',
+    align: style.align || 'left',
+    stroke: style.strokeStyle || 0,
+    strokeThickness: style.lineWidth || 0,
+    lineJoin: 'round',
+  });
+
+  const text = new PIXI.Text(cmt.text, textStyle);
+
+  // Set baseline adjustments
+  let baselineOffset = 0;
+  switch (style.textBaseline) {
+    case 'top':
+    case 'hanging':
+      baselineOffset = 0;
+      break;
+    case 'middle':
+      baselineOffset = text.height / 2;
+      break;
+    case 'bottom':
+    default:
+      baselineOffset = text.height;
+      break;
+  }
+  text.y -= baselineOffset;
+
+  // Set cmt.width and cmt.height
+  cmt.width = text.width;
+  cmt.height = text.height;
+
+  return text;
+}
+
+function setup(stage, comments) {
+  const app = stage._app;
+  comments.forEach((cmt) => {
+    cmt.sprite = createCommentSprite(cmt, app._fontSize);
+  });
+}
+
+function render(stage, cmt) {
+  const app = stage._app;
+  cmt.sprite.x = cmt.x;
+  cmt.sprite.y = cmt.y;
+  app.stage.addChild(cmt.sprite);
+}
+
+function remove(stage, cmt) {
+  const app = stage._app;
+  if (cmt.sprite) {
+    app.stage.removeChild(cmt.sprite);
+    cmt.sprite.destroy();
+    cmt.sprite = null;
+  }
+}
+
+var pixiEngine = {
+  name: 'pixi',
+  init: init$1,
+  clear: clear$1,
+  resize: resize$1,
+  framing,
+  setup,
+  render,
+  remove,
 };
 
 /* eslint no-invalid-this: 0 */
@@ -358,17 +635,23 @@ function unbindEvents(_) {
 }
 
 /* eslint-disable no-invalid-this */
-function init$1(opt) {
+function init(opt) {
   this._ = {};
   this.container = opt.container || document.createElement('div');
   this.media = opt.media;
   this._.visible = true;
 
   /* eslint-disable no-undef */
-  /* istanbul ignore next */
   {
-    this.engine = 'dom';
-    this._.engine = domEngine;
+    const engineName = "dom".toLowerCase();
+    this.engine = engineName;
+    if (engineName === 'canvas') {
+      this._.engine = canvasEngine;
+    } else if (engineName === 'pixi') {
+      this._.engine = pixiEngine;
+    } else {
+      this._.engine = domEngine;
+    }
   }
   /* eslint-enable no-undef */
   this._.requestID = 0;
@@ -393,10 +676,22 @@ function init$1(opt) {
   }
 
   this._.stage = this._.engine.init(this.container);
-  this._.stage.style.cssText += 'position:relative;pointer-events:none;';
+
+  // Adjust the style based on whether the stage is a view or an element
+  if (this._.stage.style) {
+    this._.stage.style.cssText += 'position:relative;pointer-events:none;';
+  } else if (this._.stage.view && this._.stage.view.style) {
+    this._.stage.view.style.cssText += 'position:relative;pointer-events:none;';
+  }
 
   this.resize();
-  this.container.appendChild(this._.stage);
+
+  // Append the correct element to the container
+  if (this._.stage.view) {
+    this.container.appendChild(this._.stage.view);
+  } else {
+    this.container.appendChild(this._.stage);
+  }
 
   this._.space = {};
   resetSpace(this._.space);
@@ -489,14 +784,14 @@ function hide() {
 }
 
 /* eslint-disable no-invalid-this */
-function clear$1() {
+function clear() {
   this._.engine.clear(this._.stage, this._.runningList);
   this._.runningList = [];
   return this;
 }
 
 /* eslint-disable no-invalid-this */
-function resize$1() {
+function resize() {
   this._.width = this.container.offsetWidth;
   this._.height = this.container.offsetHeight;
   this._.engine.resize(this._.stage, this._.width, this._.height);
@@ -524,7 +819,7 @@ var speed = {
 };
 
 function Danmaku(opt) {
-  opt && init$1.call(this, opt);
+  opt && init.call(this, opt);
 }
 Danmaku.prototype.destroy = function() {
   return destroy.call(this);
@@ -539,11 +834,11 @@ Danmaku.prototype.hide = function() {
   return hide.call(this);
 };
 Danmaku.prototype.clear = function() {
-  return clear$1.call(this);
+  return clear.call(this);
 };
 Danmaku.prototype.resize = function() {
-  return resize$1.call(this);
+  return resize.call(this);
 };
 Object.defineProperty(Danmaku.prototype, 'speed', speed);
 
-export default Danmaku;
+export { Danmaku as default };

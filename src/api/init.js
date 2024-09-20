@@ -1,5 +1,6 @@
 import domEngine from '../engine/dom.js';
 import canvasEngine from '../engine/canvas.js';
+import pixiEngine from '../engine/pixi.js';
 import { bindEvents } from '../internal/events.js';
 import play from '../internal/play.js';
 import seek from '../internal/seek.js';
@@ -13,15 +14,25 @@ export default function(opt) {
   this._.visible = true;
 
   /* eslint-disable no-undef */
-  /* istanbul ignore next */
-  if (process.env.ENGINE === 'dom') {
-    this.engine = 'dom';
-    this._.engine = domEngine;
-  }
-  /* istanbul ignore next */
-  if (process.env.ENGINE === 'canvas') {
-    this.engine = 'canvas';
-    this._.engine = canvasEngine;
+  if (process.env.ENGINE) {
+    const engineName = process.env.ENGINE.toLowerCase();
+    this.engine = engineName;
+    if (engineName === 'canvas') {
+      this._.engine = canvasEngine;
+    } else if (engineName === 'pixi') {
+      this._.engine = pixiEngine;
+    } else {
+      this._.engine = domEngine;
+    }
+  } else {
+    this.engine = (opt.engine || 'DOM').toLowerCase();
+    if (this.engine === 'canvas') {
+      this._.engine = canvasEngine;
+    } else if (this.engine === 'pixi') {
+      this._.engine = pixiEngine;
+    } else {
+      this._.engine = domEngine;
+    }
   }
   /* istanbul ignore else */
   if (!process.env.ENGINE) {
@@ -51,10 +62,22 @@ export default function(opt) {
   }
 
   this._.stage = this._.engine.init(this.container);
-  this._.stage.style.cssText += 'position:relative;pointer-events:none;';
+
+  // Adjust the style based on whether the stage is a view or an element
+  if (this._.stage.style) {
+    this._.stage.style.cssText += 'position:relative;pointer-events:none;';
+  } else if (this._.stage.view && this._.stage.view.style) {
+    this._.stage.view.style.cssText += 'position:relative;pointer-events:none;';
+  }
 
   this.resize();
-  this.container.appendChild(this._.stage);
+
+  // Append the correct element to the container
+  if (this._.stage.view) {
+    this.container.appendChild(this._.stage.view);
+  } else {
+    this.container.appendChild(this._.stage);
+  }
 
   this._.space = {};
   resetSpace(this._.space);
