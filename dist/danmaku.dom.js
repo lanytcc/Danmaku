@@ -1,8 +1,28 @@
 (function (global, factory) {
-  typeof exports === 'object' && typeof module !== 'undefined' ? module.exports = factory() :
-  typeof define === 'function' && define.amd ? define(factory) :
-  (global = typeof globalThis !== 'undefined' ? globalThis : global || self, global.Danmaku = factory());
-})(this, (function () { 'use strict';
+  typeof exports === 'object' && typeof module !== 'undefined' ? module.exports = factory(require('pixi.js')) :
+  typeof define === 'function' && define.amd ? define(['pixi.js'], factory) :
+  (global = typeof globalThis !== 'undefined' ? globalThis : global || self, global.Danmaku = factory(global.PIXI));
+})(this, (function (PIXI) { 'use strict';
+
+  function _interopNamespace(e) {
+    if (e && e.__esModule) return e;
+    var n = Object.create(null);
+    if (e) {
+      Object.keys(e).forEach(function (k) {
+        if (k !== 'default') {
+          var d = Object.getOwnPropertyDescriptor(e, k);
+          Object.defineProperty(n, k, d.get ? d : {
+            enumerable: true,
+            get: function () { return e[k]; }
+          });
+        }
+      });
+    }
+    n["default"] = e;
+    return Object.freeze(n);
+  }
+
+  var PIXI__namespace = /*#__PURE__*/_interopNamespace(PIXI);
 
   var transform = (function() {
     /* istanbul ignore next */
@@ -44,13 +64,13 @@
     return node;
   }
 
-  function init$1() {
+  function init$3() {
     var stage = document.createElement('div');
     stage.style.cssText = 'overflow:hidden;white-space:nowrap;transform:translateZ(0);';
     return stage;
   }
 
-  function clear$1(stage) {
+  function clear$3(stage) {
     var lc = stage.lastChild;
     while (lc) {
       stage.removeChild(lc);
@@ -58,16 +78,16 @@
     }
   }
 
-  function resize$1(stage, width, height) {
+  function resize$3(stage, width, height) {
     stage.style.width = width + 'px';
     stage.style.height = height + 'px';
   }
 
-  function framing() {
+  function framing$2() {
     //
   }
 
-  function setup(stage, comments) {
+  function setup$2(stage, comments) {
     var df = document.createDocumentFragment();
     var i = 0;
     var cmt = null;
@@ -86,12 +106,12 @@
     }
   }
 
-  function render(stage, cmt) {
+  function render$2(stage, cmt) {
     cmt.node.style[transform] = 'translate(' + cmt.x + 'px,' + cmt.y + 'px)';
   }
 
   /* eslint no-invalid-this: 0 */
-  function remove(stage, cmt) {
+  function remove$2(stage, cmt) {
     stage.removeChild(cmt.node);
     /* istanbul ignore else */
     if (!this.media) {
@@ -101,13 +121,238 @@
 
   var domEngine = {
     name: 'dom',
+    init: init$3,
+    clear: clear$3,
+    resize: resize$3,
+    framing: framing$2,
+    setup: setup$2,
+    render: render$2,
+    remove: remove$2,
+  };
+
+  var dpr = typeof window !== 'undefined' && window.devicePixelRatio || 1;
+
+  var canvasHeightCache = Object.create(null);
+
+  function canvasHeight(font, fontSize) {
+    if (canvasHeightCache[font]) {
+      return canvasHeightCache[font];
+    }
+    var height = 12;
+    var regex = /(\d+(?:\.\d+)?)(px|%|em|rem)(?:\s*\/\s*(\d+(?:\.\d+)?)(px|%|em|rem)?)?/;
+    var p = font.match(regex);
+    if (p) {
+      var fs = p[1] * 1 || 10;
+      var fsu = p[2];
+      var lh = p[3] * 1 || 1.2;
+      var lhu = p[4];
+      if (fsu === '%') fs *= fontSize.container / 100;
+      if (fsu === 'em') fs *= fontSize.container;
+      if (fsu === 'rem') fs *= fontSize.root;
+      if (lhu === 'px') height = lh;
+      if (lhu === '%') height = fs * lh / 100;
+      if (lhu === 'em') height = fs * lh;
+      if (lhu === 'rem') height = fontSize.root * lh;
+      if (lhu === undefined) height = fs * lh;
+    }
+    canvasHeightCache[font] = height;
+    return height;
+  }
+
+  function createCommentCanvas(cmt, fontSize) {
+    if (typeof cmt.render === 'function') {
+      var cvs = cmt.render();
+      if (cvs instanceof HTMLCanvasElement) {
+        cmt.width = cvs.width;
+        cmt.height = cvs.height;
+        return cvs;
+      }
+    }
+    var canvas = document.createElement('canvas');
+    var ctx = canvas.getContext('2d');
+    var style = cmt.style || {};
+    style.font = style.font || '10px sans-serif';
+    style.textBaseline = style.textBaseline || 'bottom';
+    var strokeWidth = style.lineWidth * 1;
+    strokeWidth = (strokeWidth > 0 && strokeWidth !== Infinity)
+      ? Math.ceil(strokeWidth)
+      : !!style.strokeStyle * 1;
+    ctx.font = style.font;
+    cmt.width = cmt.width ||
+      Math.max(1, Math.ceil(ctx.measureText(cmt.text).width) + strokeWidth * 2);
+    cmt.height = cmt.height ||
+      Math.ceil(canvasHeight(style.font, fontSize)) + strokeWidth * 2;
+    canvas.width = cmt.width * dpr;
+    canvas.height = cmt.height * dpr;
+    ctx.scale(dpr, dpr);
+    for (var key in style) {
+      ctx[key] = style[key];
+    }
+    var baseline = 0;
+    switch (style.textBaseline) {
+      case 'top':
+      case 'hanging':
+        baseline = strokeWidth;
+        break;
+      case 'middle':
+        baseline = cmt.height >> 1;
+        break;
+      default:
+        baseline = cmt.height - strokeWidth;
+    }
+    if (style.strokeStyle) {
+      ctx.strokeText(cmt.text, strokeWidth, baseline);
+    }
+    ctx.fillText(cmt.text, strokeWidth, baseline);
+    return canvas;
+  }
+
+  function computeFontSize$1(el) {
+    return window
+      .getComputedStyle(el, null)
+      .getPropertyValue('font-size')
+      .match(/(.+)px/)[1] * 1;
+  }
+
+  function init$2(container) {
+    var stage = document.createElement('canvas');
+    stage.context = stage.getContext('2d');
+    stage._fontSize = {
+      root: computeFontSize$1(document.getElementsByTagName('html')[0]),
+      container: computeFontSize$1(container)
+    };
+    return stage;
+  }
+
+  function clear$2(stage, comments) {
+    stage.context.clearRect(0, 0, stage.width, stage.height);
+    // avoid caching canvas to reduce memory usage
+    for (var i = 0; i < comments.length; i++) {
+      comments[i].canvas = null;
+    }
+  }
+
+  function resize$2(stage, width, height) {
+    stage.width = width * dpr;
+    stage.height = height * dpr;
+    stage.style.width = width + 'px';
+    stage.style.height = height + 'px';
+  }
+
+  function framing$1(stage) {
+    stage.context.clearRect(0, 0, stage.width, stage.height);
+  }
+
+  function setup$1(stage, comments) {
+    for (var i = 0; i < comments.length; i++) {
+      var cmt = comments[i];
+      cmt.canvas = createCommentCanvas(cmt, stage._fontSize);
+    }
+  }
+
+  function render$1(stage, cmt) {
+    stage.context.drawImage(cmt.canvas, cmt.x * dpr, cmt.y * dpr);
+  }
+
+  function remove$1(stage, cmt) {
+    // avoid caching canvas to reduce memory usage
+    cmt.canvas = null;
+  }
+
+  var canvasEngine = {
+    name: 'canvas',
+    init: init$2,
+    clear: clear$2,
+    resize: resize$2,
+    framing: framing$1,
+    setup: setup$1,
+    render: render$1,
+    remove: remove$1,
+  };
+
+  function computeFontSize(el) {
+    return parseFloat(
+      window.getComputedStyle(el).getPropertyValue('font-size')
+    );
+  }
+
+  function init$1(container) {
+    const app = new PIXI__namespace.Application({
+      resizeTo: container,
+      backgroundAlpha: 0, // Transparent background
+      antialias: true,
+    });
+    app._fontSize = {
+      root: computeFontSize(document.documentElement),
+      container: computeFontSize(container),
+    };
+    app.view._app = app; // Attach app to view for later reference
+    return app.view;
+  }
+
+  function clear$1(stage, comments) {
+    const app = stage._app;
+    app.stage.removeChildren();
+    comments.forEach((cmt) => {
+      cmt.sprite = null;
+    });
+  }
+
+  function resize$1(stage, width, height) {
+    const app = stage._app;
+    app.renderer.resize(width, height);
+  }
+
+  /* eslint-disable-next-line no-unused-vars */
+  function framing(stage) {
+    // No action needed; Pixi.js handles rendering
+  }
+
+  function createCommentSprite(cmt, fontSize) {
+    const styleOptions = {
+      fontSize: cmt.style?.fontSize || '10px',
+      fontFamily: cmt.style?.fontFamily || 'Arial',
+      fill: cmt.style?.fill || '#ffffff',
+      align: cmt.style?.align || 'left',
+    };
+
+    const textStyle = new PIXI__namespace.TextStyle(styleOptions);
+    const text = new PIXI__namespace.Text(cmt.text, textStyle);
+    return text;
+  }
+
+  function setup(stage, comments) {
+    const app = stage._app;
+    comments.forEach((cmt) => {
+      cmt.sprite = createCommentSprite(cmt, app._fontSize);
+    });
+  }
+
+  function render(stage, cmt) {
+    const app = stage._app;
+    cmt.sprite.x = cmt.x;
+    cmt.sprite.y = cmt.y;
+    app.stage.addChild(cmt.sprite);
+  }
+
+  function remove(stage, cmt) {
+    const app = stage._app;
+    if (cmt.sprite) {
+      app.stage.removeChild(cmt.sprite);
+      cmt.sprite.destroy();
+      cmt.sprite = null;
+    }
+  }
+
+  var pixiEngine = {
+    name: 'pixi',
     init: init$1,
     clear: clear$1,
     resize: resize$1,
-    framing: framing,
-    setup: setup,
-    render: render,
-    remove: remove,
+    framing,
+    setup,
+    render,
+    remove,
   };
 
   /* eslint no-invalid-this: 0 */
@@ -438,8 +683,8 @@
       this._.engine.render.bind(this),
       this._.engine.remove.bind(this)
     );
-    function frame() {
-      engine.call(that);
+    function frame(timestamp) {
+      engine.call(that, timestamp);
       that._.requestID = raf(frame);
     }
     this._.requestID = raf(frame);
@@ -501,38 +746,53 @@
     this._.visible = true;
 
     /* eslint-disable no-undef */
-    /* istanbul ignore next */
     {
-      this.engine = 'dom';
-      this._.engine = domEngine;
+      const engineName = "dom".toLowerCase();
+      this.engine = engineName;
+      if (engineName === 'canvas') {
+        this._.engine = canvasEngine;
+      } else if (engineName === 'pixi') {
+        this._.engine = pixiEngine;
+      } else {
+        this._.engine = domEngine;
+      }
     }
     /* eslint-enable no-undef */
-    this._.requestID = 0;
 
+    this._.requestID = 0;
     this._.speed = Math.max(0, opt.speed) || 144;
     this._.duration = 4;
-
     this.comments = opt.comments || [];
-    this.comments.sort(function(a, b) {
-      return a.time - b.time;
+    this.comments.sort((a, b) => a.time - b.time);
+    this.comments.forEach((cmt) => {
+      cmt.mode = formatMode(cmt.mode);
     });
-    for (var i = 0; i < this.comments.length; i++) {
-      this.comments[i].mode = formatMode(this.comments[i].mode);
-    }
     this._.runningList = [];
     this._.position = 0;
-
     this._.paused = true;
+
     if (this.media) {
       this._.listener = {};
       bindEvents.call(this, this._.listener);
     }
 
     this._.stage = this._.engine.init(this.container);
-    this._.stage.style.cssText += 'position:relative;pointer-events:none;';
+
+    // Adjust the style based on whether the stage is a view or an element
+    if (this._.stage.style) {
+      this._.stage.style.cssText += 'position:relative;pointer-events:none;';
+    } else if (this._.stage.view && this._.stage.view.style) {
+      this._.stage.view.style.cssText += 'position:relative;pointer-events:none;';
+    }
 
     this.resize();
-    this.container.appendChild(this._.stage);
+
+    // Append the correct element to the container
+    if (this._.stage.view) {
+      this.container.appendChild(this._.stage.view);
+    } else {
+      this.container.appendChild(this._.stage);
+    }
 
     this._.space = {};
     resetSpace(this._.space);

@@ -747,10 +747,11 @@
 
     /* eslint-disable no-undef */
     {
-      this.engine = (opt.engine || 'DOM').toLowerCase();
-      if (this.engine === 'canvas') {
+      const engineName = "pixi".toLowerCase();
+      this.engine = engineName;
+      if (engineName === 'canvas') {
         this._.engine = canvasEngine;
-      } else if (this.engine === 'pixi') {
+      } else if (engineName === 'pixi') {
         this._.engine = pixiEngine;
       } else {
         this._.engine = domEngine;

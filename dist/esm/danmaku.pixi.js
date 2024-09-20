@@ -723,7 +723,7 @@ function init(opt) {
 
   /* eslint-disable no-undef */
   {
-    const engineName = "canvas".toLowerCase();
+    const engineName = "pixi".toLowerCase();
     this.engine = engineName;
     if (engineName === 'canvas') {
       this._.engine = canvasEngine;

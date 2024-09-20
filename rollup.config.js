@@ -1,7 +1,7 @@
 import replace from '@rollup/plugin-replace';
 import { terser } from 'rollup-plugin-terser';
 
-export default ['', 'dom', 'canvas'].map((engine) => {
+export default ['', 'dom', 'canvas', 'pixi'].map((engine) => {
   const files = ['', 'min'].map((env) => (
     ['danmaku', engine, env, 'js'].filter((x) => x).join('.')
   ));
