@@ -106,7 +106,7 @@ var domEngine = {
   remove: remove$2,
 };
 
-var dpr = typeof window !== 'undefined' && window.devicePixelRatio || 1;
+var dpr$1 = typeof window !== 'undefined' && window.devicePixelRatio || 1;
 
 var canvasHeightCache = Object.create(null);
 
@@ -158,9 +158,9 @@ function createCommentCanvas(cmt, fontSize) {
     Math.max(1, Math.ceil(ctx.measureText(cmt.text).width) + strokeWidth * 2);
   cmt.height = cmt.height ||
     Math.ceil(canvasHeight(style.font, fontSize)) + strokeWidth * 2;
-  canvas.width = cmt.width * dpr;
-  canvas.height = cmt.height * dpr;
-  ctx.scale(dpr, dpr);
+  canvas.width = cmt.width * dpr$1;
+  canvas.height = cmt.height * dpr$1;
+  ctx.scale(dpr$1, dpr$1);
   for (var key in style) {
     ctx[key] = style[key];
   }
@@ -209,8 +209,8 @@ function clear$2(stage, comments) {
 }
 
 function resize$2(stage, width, height) {
-  stage.width = width * dpr;
-  stage.height = height * dpr;
+  stage.width = width * dpr$1;
+  stage.height = height * dpr$1;
   stage.style.width = width + 'px';
   stage.style.height = height + 'px';
 }
@@ -227,7 +227,7 @@ function setup$1(stage, comments) {
 }
 
 function render$1(stage, cmt) {
-  stage.context.drawImage(cmt.canvas, cmt.x * dpr, cmt.y * dpr);
+  stage.context.drawImage(cmt.canvas, cmt.x * dpr$1, cmt.y * dpr$1);
 }
 
 function remove$1(stage, cmt) {
@@ -246,6 +246,8 @@ var canvasEngine = {
   remove: remove$1,
 };
 
+const dpr = typeof window !== 'undefined' && window.devicePixelRatio || 1;
+
 function computeFontSize(el) {
   return parseFloat(
     window.getComputedStyle(el).getPropertyValue('font-size')
@@ -254,15 +256,19 @@ function computeFontSize(el) {
 
 function init$1(container) {
   const app = new PIXI.Application({
-    resizeTo: container,
+    width: container.clientWidth * dpr,
+    height: container.clientHeight * dpr,
     backgroundAlpha: 0, // Transparent background
     antialias: true,
+    resolution: dpr,
+    autoDensity: true,
   });
   app._fontSize = {
     root: computeFontSize(document.documentElement),
     container: computeFontSize(container),
   };
   app.view._app = app; // Attach app to view for later reference
+  app.stage.scale.set(1 / dpr, 1 / dpr); // Scale down for high-DPI displays
   return app.view;
 }
 
@@ -276,24 +282,70 @@ function clear$1(stage, comments) {
 
 function resize$1(stage, width, height) {
   const app = stage._app;
-  app.renderer.resize(width, height);
+  app.renderer.resize(width * dpr, height * dpr);
+  app.stage.scale.set(1 / dpr, 1 / dpr);
 }
 
-/* eslint-disable-next-line no-unused-vars */
 function framing(stage) {
   // No action needed; Pixi.js handles rendering
 }
 
-function createCommentSprite(cmt, fontSize) {
-  const styleOptions = {
-    fontSize: cmt.style?.fontSize || '10px',
-    fontFamily: cmt.style?.fontFamily || 'Arial',
-    fill: cmt.style?.fill || '#ffffff',
-    align: cmt.style?.align || 'left',
-  };
+function parseFont(font, fontSize) {
+  let fontSizeValue = 10;
+  const regex = /(\d+(?:\.\d+)?)(px|%|em|rem)/;
+  const match = font.match(regex);
+  if (match) {
+    fontSizeValue = parseFloat(match[1]);
+    const unit = match[2];
+    if (unit === '%') fontSizeValue *= fontSize.container / 100;
+    if (unit === 'em') fontSizeValue *= fontSize.container;
+    if (unit === 'rem') fontSizeValue *= fontSize.root;
+  }
+  return fontSizeValue;
+}
 
-  const textStyle = new PIXI.TextStyle(styleOptions);
+function createCommentSprite(cmt, fontSize) {
+  const defaultStyle = {
+    font: '10px sans-serif',
+    fillStyle: '#ffffff',
+    textBaseline: 'bottom',
+  };
+  const style = { ...defaultStyle, ...cmt.style };
+  const fontSizeValue = parseFont(style.font, fontSize);
+
+  const textStyle = new PIXI.TextStyle({
+    fontFamily: style.fontFamily || 'sans-serif',
+    fontSize: fontSizeValue,
+    fill: style.fillStyle || '#ffffff',
+    align: style.align || 'left',
+    stroke: style.strokeStyle || 0,
+    strokeThickness: style.lineWidth || 0,
+    lineJoin: 'round',
+  });
+
   const text = new PIXI.Text(cmt.text, textStyle);
+
+  // Set baseline adjustments
+  let baselineOffset = 0;
+  switch (style.textBaseline) {
+    case 'top':
+    case 'hanging':
+      baselineOffset = 0;
+      break;
+    case 'middle':
+      baselineOffset = text.height / 2;
+      break;
+    case 'bottom':
+    default:
+      baselineOffset = text.height;
+      break;
+  }
+  text.y -= baselineOffset;
+
+  // Set cmt.width and cmt.height
+  cmt.width = text.width;
+  cmt.height = text.height;
+
   return text;
 }
 
