@@ -1,5 +1,5 @@
 import createEngine from '../engine/index.js';
-import { raf } from '../utils.js';
+import { raf, now } from '../utils.js';
 
 /* eslint no-invalid-this: 0 */
 export default function() {
@@ -10,7 +10,7 @@ export default function() {
   if (this.media) {
     for (var i = 0; i < this._.runningList.length; i++) {
       var cmt = this._.runningList[i];
-      cmt._utc = Date.now() / 1000 - (this.media.currentTime - cmt.time);
+      cmt._utc = now() / 1000 - (this.media.currentTime - cmt.time);
     }
   }
   var that = this;

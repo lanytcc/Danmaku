@@ -1,7 +1,8 @@
+import { now } from '../utils.js';
 /* eslint no-invalid-this: 0 */
 export default function(cmt) {
   const that = this;
-  const ct = that.media ? that.media.currentTime : Date.now() / 1000;
+  const ct = that.media ? that.media.currentTime : now() / 1000;
   const pbr = that.media ? that.media.playbackRate : 1;
   const mode = cmt.mode;
 

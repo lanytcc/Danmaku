@@ -1,4 +1,5 @@
 import allocate from '../internal/allocate.js';
+import { now } from '../utils.js';
 
 /* eslint no-invalid-this: 0 */
 
@@ -15,7 +16,7 @@ export default function(framing, setup, render, remove) {
     // If timestamp is not provided, use performance.now()
     let timestamp = _timestamp;
     if (typeof timestamp === 'undefined') {
-      timestamp = Date.now();
+      timestamp = now();
     }
 
     // Handle the framing of the stage
